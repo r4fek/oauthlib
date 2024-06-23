@@ -54,16 +54,16 @@ class SkeletonValidator(RequestValidator):
 
     # Token request
 
-    def client_authentication_required(self, request, *args, **kwargs):
+    async def client_authentication_required(self, request, *args, **kwargs):
         # Check if the client provided authentication information that needs to
         # be validated, e.g. HTTP Basic auth
         pass
 
-    def authenticate_client(self, request, *args, **kwargs):
+    async def authenticate_client(self, request, *args, **kwargs):
         # Whichever authentication method suits you, HTTP Basic might work
         pass
 
-    def authenticate_client_id(self, client_id, request, *args, **kwargs):
+    async def authenticate_client_id(self, client_id, request, *args, **kwargs):
         # The client_id must match an existing public (non-confidential) client
         pass
 

@@ -46,7 +46,7 @@ class ClientCredentialsGrant(GrantTypeBase):
     .. _`Client Credentials Grant`: https://tools.ietf.org/html/rfc6749#section-4.4
     """
 
-    def create_token_response(self, request, token_handler):
+    async def create_token_response(self, request, token_handler):
         """Return token or error in JSON format.
 
         :param request: OAuthlib request.
@@ -66,7 +66,7 @@ class ClientCredentialsGrant(GrantTypeBase):
         headers = self._get_default_headers()
         try:
             log.debug('Validating access token request, %r.', request)
-            self.validate_token_request(request)
+            await self.validate_token_request(request)
         except errors.OAuth2Error as e:
             log.debug('Client error in token request. %s.', e)
             headers.update(e.headers)
@@ -83,7 +83,7 @@ class ClientCredentialsGrant(GrantTypeBase):
                   request.client_id, request.client, token)
         return headers, json.dumps(token), 200
 
-    def validate_token_request(self, request):
+    async def validate_token_request(self, request):
         """
         :param request: OAuthlib request.
         :type request: oauthlib.common.Request
@@ -104,7 +104,7 @@ class ClientCredentialsGrant(GrantTypeBase):
                                                  request=request)
 
         log.debug('Authenticating client, %r.', request)
-        if not self.request_validator.authenticate_client(request):
+        if not await self.request_validator.authenticate_client(request):
             log.debug('Client authentication failed, %r.', request)
             raise errors.InvalidClientError(request=request)
         elif not hasattr(request.client, 'client_id'):

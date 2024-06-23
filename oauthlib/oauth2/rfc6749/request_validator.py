@@ -2,6 +2,7 @@
 oauthlib.oauth2.rfc6749.request_validator
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 """
+
 import logging
 
 log = logging.getLogger(__name__)
@@ -9,7 +10,7 @@ log = logging.getLogger(__name__)
 
 class RequestValidator:
 
-    def client_authentication_required(self, request, *args, **kwargs):
+    async def client_authentication_required(self, request, *args, **kwargs):
         """Determine if client authentication is required for current request.
 
         According to the rfc6749, client authentication is required in the following cases:
@@ -38,7 +39,7 @@ class RequestValidator:
         """
         return True
 
-    def authenticate_client(self, request, *args, **kwargs):
+    async def authenticate_client(self, request, *args, **kwargs):
         """Authenticate client through means outside the OAuth 2 spec.
 
         Means of authentication is negotiated beforehand and may for example
@@ -74,7 +75,7 @@ class RequestValidator:
         """
         raise NotImplementedError('Subclasses must implement this method.')
 
-    def authenticate_client_id(self, client_id, request, *args, **kwargs):
+    async def authenticate_client_id(self, client_id, request, *args, **kwargs):
         """Ensure client_id belong to a non-confidential client.
 
         A non-confidential client is one that is not required to authenticate
@@ -94,8 +95,9 @@ class RequestValidator:
         """
         raise NotImplementedError('Subclasses must implement this method.')
 
-    def confirm_redirect_uri(self, client_id, code, redirect_uri, client, request,
-                             *args, **kwargs):
+    def confirm_redirect_uri(
+        self, client_id, code, redirect_uri, client, request, *args, **kwargs
+    ):
         """Ensure that the authorization process represented by this authorization
         code began with this 'redirect_uri'.
 
@@ -161,7 +163,9 @@ class RequestValidator:
         """
         raise NotImplementedError('Subclasses must implement this method.')
 
-    def is_within_original_scope(self, request_scopes, refresh_token, request, *args, **kwargs):
+    def is_within_original_scope(
+        self, request_scopes, refresh_token, request, *args, **kwargs
+    ):
         """Check if requested scopes are within a scope of the refresh token.
 
         When access tokens are refreshed the scope of the new token
@@ -225,7 +229,9 @@ class RequestValidator:
         """
         raise NotImplementedError('Subclasses must implement this method.')
 
-    def invalidate_authorization_code(self, client_id, code, request, *args, **kwargs):
+    async def invalidate_authorization_code(
+        self, client_id, code, request, *args, **kwargs
+    ):
         """Invalidate an authorization code after use.
 
         :param client_id: Unicode client identifier.
@@ -238,7 +244,7 @@ class RequestValidator:
         """
         raise NotImplementedError('Subclasses must implement this method.')
 
-    def revoke_token(self, token, token_type_hint, request, *args, **kwargs):
+    async def revoke_token(self, token, token_type_hint, request, *args, **kwargs):
         """Revoke an access or refresh token.
 
         :param token: The token string.
@@ -251,7 +257,7 @@ class RequestValidator:
         """
         raise NotImplementedError('Subclasses must implement this method.')
 
-    def rotate_refresh_token(self, request):
+    async def rotate_refresh_token(self, request):
         """Determine whether to rotate the refresh token. Default, yes.
 
         When access tokens are refreshed the old refresh token can be kept
@@ -267,7 +273,7 @@ class RequestValidator:
         """
         return True
 
-    def save_authorization_code(self, client_id, code, request, *args, **kwargs):
+    async def save_authorization_code(self, client_id, code, request, *args, **kwargs):
         """Persist the authorization_code.
 
         The code should at minimum be stored with:
@@ -303,7 +309,7 @@ class RequestValidator:
         """
         raise NotImplementedError('Subclasses must implement this method.')
 
-    def save_token(self, token, request, *args, **kwargs):
+    async def save_token(self, token, request, *args, **kwargs):
         """Persist the token with a token type specific method.
 
         Currently, only save_bearer_token is supported.
@@ -312,9 +318,9 @@ class RequestValidator:
         :param request: OAuthlib request.
         :type request: oauthlib.common.Request
         """
-        return self.save_bearer_token(token, request, *args, **kwargs)
+        return await self.save_bearer_token(token, request, *args, **kwargs)
 
-    def save_bearer_token(self, token, request, *args, **kwargs):
+    async def save_bearer_token(self, token, request, *args, **kwargs):
         """Persist the Bearer token.
 
         The Bearer token should at minimum be associated with:
@@ -364,7 +370,7 @@ class RequestValidator:
         """
         raise NotImplementedError('Subclasses must implement this method.')
 
-    def validate_bearer_token(self, token, scopes, request):
+    async def validate_bearer_token(self, token, scopes, request):
         """Ensure the Bearer token is valid and authorized access to scopes.
 
         :param token: A string of random characters.
@@ -416,7 +422,7 @@ class RequestValidator:
         """
         raise NotImplementedError('Subclasses must implement this method.')
 
-    def validate_client_id(self, client_id, request, *args, **kwargs):
+    async def validate_client_id(self, client_id, request, *args, **kwargs):
         """Ensure client_id belong to a valid and active client.
 
         Note, while not strictly necessary it can often be very convenient
@@ -434,7 +440,7 @@ class RequestValidator:
         """
         raise NotImplementedError('Subclasses must implement this method.')
 
-    def validate_code(self, client_id, code, client, request, *args, **kwargs):
+    async def validate_code(self, client_id, code, client, request, *args, **kwargs):
         """Verify that the authorization_code is valid and assigned to the given
         client.
 
@@ -469,7 +475,9 @@ class RequestValidator:
         """
         raise NotImplementedError('Subclasses must implement this method.')
 
-    def validate_grant_type(self, client_id, grant_type, client, request, *args, **kwargs):
+    def validate_grant_type(
+        self, client_id, grant_type, client, request, *args, **kwargs
+    ):
         """Ensure client is authorized to use the grant_type requested.
 
         :param client_id: Unicode client identifier.
@@ -505,7 +513,9 @@ class RequestValidator:
         """
         raise NotImplementedError('Subclasses must implement this method.')
 
-    def validate_refresh_token(self, refresh_token, client, request, *args, **kwargs):
+    async def validate_refresh_token(
+        self, refresh_token, client, request, *args, **kwargs
+    ):
         """Ensure the Bearer token is valid and authorized access to scopes.
 
         OBS! The request.user attribute should be set to the resource owner
@@ -524,7 +534,9 @@ class RequestValidator:
         """
         raise NotImplementedError('Subclasses must implement this method.')
 
-    def validate_response_type(self, client_id, response_type, client, request, *args, **kwargs):
+    def validate_response_type(
+        self, client_id, response_type, client, request, *args, **kwargs
+    ):
         """Ensure client is authorized to use the response_type requested.
 
         :param client_id: Unicode client identifier.
@@ -558,7 +570,7 @@ class RequestValidator:
         """
         raise NotImplementedError('Subclasses must implement this method.')
 
-    def validate_user(self, username, password, client, request, *args, **kwargs):
+    async def validate_user(self, username, password, client, request, *args, **kwargs):
         """Ensure the username and password is valid.
 
         OBS! The validation should also set the user attribute of the request
