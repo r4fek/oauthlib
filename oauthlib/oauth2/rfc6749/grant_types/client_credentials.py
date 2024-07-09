@@ -2,6 +2,7 @@
 oauthlib.oauth2.rfc6749.grant_types
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 """
+
 import json
 import logging
 
@@ -12,7 +13,6 @@ log = logging.getLogger(__name__)
 
 
 class ClientCredentialsGrant(GrantTypeBase):
-
     """`Client Credentials Grant`_
 
     The client can request an access token using only its client
@@ -46,7 +46,7 @@ class ClientCredentialsGrant(GrantTypeBase):
     .. _`Client Credentials Grant`: https://tools.ietf.org/html/rfc6749#section-4.4
     """
 
-    def create_token_response(self, request, token_handler):
+    async def create_token_response(self, request, token_handler):
         """Return token or error in JSON format.
 
         :param request: OAuthlib request.
@@ -66,24 +66,28 @@ class ClientCredentialsGrant(GrantTypeBase):
         headers = self._get_default_headers()
         try:
             log.debug('Validating access token request, %r.', request)
-            self.validate_token_request(request)
+            await self.validate_token_request(request)
         except errors.OAuth2Error as e:
             log.debug('Client error in token request. %s.', e)
             headers.update(e.headers)
             return headers, e.json, e.status_code
 
-        token = token_handler.create_token(request, refresh_token=False)
+        token = await token_handler.create_token(request, refresh_token=False)
 
         for modifier in self._token_modifiers:
             token = modifier(token)
 
-        self.request_validator.save_token(token, request)
+        await self.request_validator.save_token(token, request)
 
-        log.debug('Issuing token to client id %r (%r), %r.',
-                  request.client_id, request.client, token)
+        log.debug(
+            'Issuing token to client id %r (%r), %r.',
+            request.client_id,
+            request.client,
+            token,
+        )
         return headers, json.dumps(token), 200
 
-    def validate_token_request(self, request):
+    async def validate_token_request(self, request):
         """
         :param request: OAuthlib request.
         :type request: oauthlib.common.Request
@@ -92,31 +96,35 @@ class ClientCredentialsGrant(GrantTypeBase):
             validator(request)
 
         if not getattr(request, 'grant_type', None):
-            raise errors.InvalidRequestError('Request is missing grant type.',
-                                             request=request)
+            raise errors.InvalidRequestError(
+                'Request is missing grant type.', request=request
+            )
 
         if not request.grant_type == 'client_credentials':
             raise errors.UnsupportedGrantTypeError(request=request)
 
         for param in ('grant_type', 'scope'):
             if param in request.duplicate_params:
-                raise errors.InvalidRequestError(description='Duplicate %s parameter.' % param,
-                                                 request=request)
+                raise errors.InvalidRequestError(
+                    description='Duplicate %s parameter.' % param, request=request
+                )
 
         log.debug('Authenticating client, %r.', request)
-        if not self.request_validator.authenticate_client(request):
+        if not await self.request_validator.authenticate_client(request):
             log.debug('Client authentication failed, %r.', request)
             raise errors.InvalidClientError(request=request)
         elif not hasattr(request.client, 'client_id'):
-            raise NotImplementedError('Authenticate client must set the '
-                                      'request.client.client_id attribute '
-                                      'in authenticate_client.')
+            raise NotImplementedError(
+                'Authenticate client must set the '
+                'request.client.client_id attribute '
+                'in authenticate_client.'
+            )
         # Ensure client is authorized use of this grant type
-        self.validate_grant_type(request)
+        await self.validate_grant_type(request)
 
         request.client_id = request.client_id or request.client.client_id
         log.debug('Authorizing access to client %r.', request.client_id)
-        self.validate_scopes(request)
+        await self.validate_scopes(request)
 
         for validator in self.custom_validators.post_token:
             validator(request)

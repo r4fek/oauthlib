@@ -5,6 +5,7 @@ from oauthlib.common import Request
 from oauthlib.oauth2.rfc6749.tokens import BearerToken
 from oauthlib.openid.connect.core.grant_types import RefreshTokenGrant
 
+from oauthlib.openid.connect.core.request_validator import RequestValidator
 from tests.oauth2.rfc6749.grant_types.test_refresh_token import (
     RefreshTokenGrantTest,
 )
@@ -20,6 +21,7 @@ class OpenIDRefreshTokenInterferenceTest(RefreshTokenGrantTest):
 
     def setUp(self):
         super().setUp()
+        self.mock_validator = mock.AsyncMock(spec=RequestValidator)
         self.auth = RefreshTokenGrant(request_validator=self.mock_validator)
 
 
@@ -30,11 +32,13 @@ class OpenIDRefreshTokenTest(TestCase):
         self.request.grant_type = 'refresh_token'
         self.request.refresh_token = 'lsdkfhj230'
         self.request.scope = ('hello', 'openid')
-        self.mock_validator = mock.MagicMock()
+        self.mock_validator = mock.AsyncMock()
 
-        self.mock_validator = mock.MagicMock()
+        self.mock_validator.refresh_id_token = mock.MagicMock()
+        self.mock_validator.get_id_token = mock.MagicMock()
         self.mock_validator.authenticate_client.side_effect = self.set_client
         self.mock_validator.get_id_token.side_effect = get_id_token_mock
+        self.mock_validator.get_original_scopes.return_value = []
         self.auth = RefreshTokenGrant(request_validator=self.mock_validator)
 
     def set_client(self, request):
@@ -42,13 +46,11 @@ class OpenIDRefreshTokenTest(TestCase):
         request.client.client_id = 'mocked'
         return True
 
-    def test_refresh_id_token(self):
-        self.mock_validator.get_original_scopes.return_value = [
-            'hello', 'openid'
-        ]
+    async def test_refresh_id_token(self):
+        self.mock_validator.get_original_scopes.return_value = ['hello', 'openid']
         bearer = BearerToken(self.mock_validator)
 
-        headers, body, status_code = self.auth.create_token_response(
+        headers, body, status_code = await self.auth.create_token_response(
             self.request, bearer
         )
 
@@ -60,18 +62,14 @@ class OpenIDRefreshTokenTest(TestCase):
         self.assertIn('token_type', token)
         self.assertIn('expires_in', token)
         self.assertEqual(token['scope'], 'hello openid')
-        self.mock_validator.refresh_id_token.assert_called_once_with(
-            self.request
-        )
+        self.mock_validator.refresh_id_token.assert_called_once_with(self.request)
 
-    def test_refresh_id_token_false(self):
+    async def test_refresh_id_token_false(self):
         self.mock_validator.refresh_id_token.return_value = False
-        self.mock_validator.get_original_scopes.return_value = [
-            'hello', 'openid'
-        ]
+        self.mock_validator.get_original_scopes.return_value = ['hello', 'openid']
         bearer = BearerToken(self.mock_validator)
 
-        headers, body, status_code = self.auth.create_token_response(
+        headers, body, status_code = await self.auth.create_token_response(
             self.request, bearer
         )
 
@@ -83,15 +81,13 @@ class OpenIDRefreshTokenTest(TestCase):
         self.assertIn('expires_in', token)
         self.assertEqual(token['scope'], 'hello openid')
         self.assertNotIn('id_token', token)
-        self.mock_validator.refresh_id_token.assert_called_once_with(
-            self.request
-        )
+        self.mock_validator.refresh_id_token.assert_called_once_with(self.request)
 
-    def test_refresh_token_without_openid_scope(self):
+    async def test_refresh_token_without_openid_scope(self):
         self.request.scope = "hello"
         bearer = BearerToken(self.mock_validator)
 
-        headers, body, status_code = self.auth.create_token_response(
+        headers, body, status_code = await self.auth.create_token_response(
             self.request, bearer
         )
 

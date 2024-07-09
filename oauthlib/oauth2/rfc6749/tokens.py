@@ -7,6 +7,7 @@ This module contains methods for adding two types of access tokens to requests.
 - Bearer https://tools.ietf.org/html/rfc6750
 - MAC https://tools.ietf.org/html/draft-ietf-oauth-v2-http-mac-01
 """
+
 import hashlib
 import hmac
 import warnings
@@ -64,14 +65,19 @@ class OAuth2Token(dict):
         return list(self._new_scope - self._old_scope)
 
 
-def prepare_mac_header(token, uri, key, http_method,
-                       nonce=None,
-                       headers=None,
-                       body=None,
-                       ext='',
-                       hash_algorithm='hmac-sha-1',
-                       issue_time=None,
-                       draft=0):
+def prepare_mac_header(
+    token,
+    uri,
+    key,
+    http_method,
+    nonce=None,
+    headers=None,
+    body=None,
+    ext='',
+    hash_algorithm='hmac-sha-1',
+    issue_time=None,
+    draft=0,
+):
     """Add an `MAC Access Authentication`_ signature to headers.
 
     Unlike OAuth 1, this HMAC signature does not require inclusion of the
@@ -115,8 +121,9 @@ def prepare_mac_header(token, uri, key, http_method,
         raise ValueError('unknown hash algorithm')
 
     if draft == 0:
-        nonce = nonce or '{}:{}'.format(utils.generate_age(issue_time),
-                                          common.generate_nonce())
+        nonce = nonce or '{}:{}'.format(
+            utils.generate_age(issue_time), common.generate_nonce()
+        )
     else:
         ts = common.generate_timestamp()
         nonce = common.generate_nonce()
@@ -226,6 +233,7 @@ def signed_token_generator(private_pem, **kwargs):
     """
     :param private_pem:
     """
+
     def signed_token_generator(request):
         request.claims = kwargs
         return common.generate_signed_token(private_pem, request)
@@ -276,20 +284,25 @@ class TokenBase:
 
 class BearerToken(TokenBase):
     __slots__ = (
-        'request_validator', 'token_generator',
-        'refresh_token_generator', 'expires_in'
+        'request_validator',
+        'token_generator',
+        'refresh_token_generator',
+        'expires_in',
     )
 
-    def __init__(self, request_validator=None, token_generator=None,
-                 expires_in=None, refresh_token_generator=None):
+    def __init__(
+        self,
+        request_validator=None,
+        token_generator=None,
+        expires_in=None,
+        refresh_token_generator=None,
+    ):
         self.request_validator = request_validator
         self.token_generator = token_generator or random_token_generator
-        self.refresh_token_generator = (
-            refresh_token_generator or self.token_generator
-        )
+        self.refresh_token_generator = refresh_token_generator or self.token_generator
         self.expires_in = expires_in or 3600
 
-    def create_token(self, request, refresh_token=False, **kwargs):
+    async def create_token(self, request, refresh_token=False, **kwargs):
         """
         Create a BearerToken, by default without refresh token.
 
@@ -298,11 +311,15 @@ class BearerToken(TokenBase):
         :param refresh_token:
         """
         if "save_token" in kwargs:
-            warnings.warn("`save_token` has been deprecated, it was not called internally."
-                          "If you do, call `request_validator.save_token()` instead.",
-                          DeprecationWarning)
+            warnings.warn(
+                "`save_token` has been deprecated, it was not called internally."
+                "If you do, call `request_validator.save_token()` instead.",
+                DeprecationWarning,
+            )
 
-        expires_in = self.expires_in(request) if callable(self.expires_in) else self.expires_in
+        expires_in = (
+            self.expires_in(request) if callable(self.expires_in) else self.expires_in
+        )
 
         request.expires_in = expires_in
 
@@ -319,8 +336,10 @@ class BearerToken(TokenBase):
             token['scope'] = ' '.join(request.scopes)
 
         if refresh_token:
-            if (request.refresh_token and
-                    not self.request_validator.rotate_refresh_token(request)):
+            if (
+                request.refresh_token
+                and not await self.request_validator.rotate_refresh_token(request)
+            ):
                 token['refresh_token'] = request.refresh_token
             else:
                 token['refresh_token'] = self.refresh_token_generator(request)
@@ -328,14 +347,15 @@ class BearerToken(TokenBase):
         token.update(request.extra_credentials or {})
         return OAuth2Token(token)
 
-    def validate_request(self, request):
+    async def validate_request(self, request):
         """
         :param request: OAuthlib request.
         :type request: oauthlib.common.Request
         """
         token = get_token_from_header(request)
-        return self.request_validator.validate_bearer_token(
-            token, request.scopes, request)
+        return await self.request_validator.validate_bearer_token(
+            token, request.scopes, request
+        )
 
     def estimate_type(self, request):
         """

@@ -2,6 +2,7 @@
 oauthlib.openid.connect.core.request_validator
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 """
+
 import logging
 
 from oauthlib.oauth2.rfc6749.request_validator import (
@@ -14,7 +15,7 @@ log = logging.getLogger(__name__)
 class RequestValidator(OAuth2RequestValidator):
 
     def get_authorization_code_scopes(self, client_id, code, redirect_uri, request):
-        """ Extracts scopes from saved authorization code.
+        """Extracts scopes from saved authorization code.
 
         The scopes returned by this method is used to route token requests
         based on scopes passed to Authorization Code requests.
@@ -38,7 +39,7 @@ class RequestValidator(OAuth2RequestValidator):
         raise NotImplementedError('Subclasses must implement this method.')
 
     def get_authorization_code_nonce(self, client_id, code, redirect_uri, request):
-        """ Extracts nonce from saved authorization code.
+        """Extracts nonce from saved authorization code.
 
         If present in the Authentication Request, Authorization
         Servers MUST include a nonce Claim in the ID Token with the

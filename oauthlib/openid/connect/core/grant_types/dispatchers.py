@@ -28,13 +28,13 @@ class AuthorizationCodeGrantDispatcher(Dispatcher):
         log.debug('Selecting handler for request %r.', handler)
         return handler
 
-    def create_authorization_response(self, request, token_handler):
+    async def create_authorization_response(self, request, token_handler):
         """Read scope and route to the designated handler."""
-        return self._handler_for_request(request).create_authorization_response(request, token_handler)
+        return await self._handler_for_request(request).create_authorization_response(request, token_handler)
 
-    def validate_authorization_request(self, request):
+    async def validate_authorization_request(self, request):
         """Read scope and route to the designated handler."""
-        return self._handler_for_request(request).validate_authorization_request(request)
+        return await self._handler_for_request(request).validate_authorization_request(request)
 
 
 class ImplicitTokenGrantDispatcher(Dispatcher):
@@ -57,13 +57,13 @@ class ImplicitTokenGrantDispatcher(Dispatcher):
         log.debug('Selecting handler for request %r.', handler)
         return handler
 
-    def create_authorization_response(self, request, token_handler):
+    async def create_authorization_response(self, request, token_handler):
         """Read scope and route to the designated handler."""
-        return self._handler_for_request(request).create_authorization_response(request, token_handler)
+        return await self._handler_for_request(request).create_authorization_response(request, token_handler)
 
-    def validate_authorization_request(self, request):
+    async def validate_authorization_request(self, request):
         """Read scope and route to the designated handler."""
-        return self._handler_for_request(request).validate_authorization_request(request)
+        return await self._handler_for_request(request).validate_authorization_request(request)
 
 
 class AuthorizationTokenGrantDispatcher(Dispatcher):
@@ -95,7 +95,7 @@ class AuthorizationTokenGrantDispatcher(Dispatcher):
         log.debug('Selecting handler for request %r.', handler)
         return handler
 
-    def create_token_response(self, request, token_handler):
+    async def create_token_response(self, request, token_handler):
         """Read scope and route to the designated handler."""
         handler = self._handler_for_request(request)
-        return handler.create_token_response(request, token_handler)
+        return await handler.create_token_response(request, token_handler)

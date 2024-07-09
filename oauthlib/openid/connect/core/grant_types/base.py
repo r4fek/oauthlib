@@ -26,12 +26,12 @@ class GrantTypeBase:
         else:
             super(OpenIDConnectBase, self).__setattr__(attr, value)
 
-    def validate_authorization_request(self, request):
+    async def validate_authorization_request(self, request):
         """Validates the OpenID Connect authorization request parameters.
 
         :returns: (list of scopes, dict of request info)
         """
-        return self.proxy_target.validate_authorization_request(request)
+        return await self.proxy_target.validate_authorization_request(request)
 
     def _inflate_claims(self, request):
         # this may be called multiple times in a single request so make sure we only de-serialize the claims once
@@ -71,7 +71,7 @@ class GrantTypeBase:
         left_most = len(digest) // 2
         return base64.urlsafe_b64encode(digest[:left_most]).decode().rstrip("=")
 
-    def add_id_token(self, token, token_handler, request, nonce=None):
+    async def add_id_token(self, token, token_handler, request, nonce=None):
         """
         Construct an initial version of id_token, and let the
         request_validator sign or encrypt it.
