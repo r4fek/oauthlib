@@ -2,19 +2,16 @@
 import json
 from unittest import mock
 
-import pytest
-
 from oauthlib.common import Request
 from oauthlib.oauth2.rfc6749 import errors
 from oauthlib.oauth2.rfc6749.grant_types import (
     AuthorizationCodeGrant,
     authorization_code,
 )
+from oauthlib.oauth2.rfc6749.request_validator import RequestValidator
 from oauthlib.oauth2.rfc6749.tokens import BearerToken
 
 from tests.unittest import TestCase
-
-pytestmark = pytest.mark.asyncio
 
 
 class AuthorizationCodeGrantTest(TestCase):
@@ -30,10 +27,12 @@ class AuthorizationCodeGrantTest(TestCase):
         self.request.grant_type = 'authorization_code'
         self.request.redirect_uri = 'https://a.b/cb'
 
-        self.mock_validator = mock.AsyncMock()
+        self.mock_validator = mock.AsyncMock(spec=RequestValidator)
         self.mock_validator.is_pkce_required.return_value = False
         self.mock_validator.get_code_challenge.return_value = None
         self.mock_validator.is_origin_allowed.return_value = False
+        self.mock_validator.get_default_scopes.return_value = None
+        self.mock_validator.authenticate_client = mock.AsyncMock()
         self.mock_validator.authenticate_client.side_effect = self.set_client
         self.auth = AuthorizationCodeGrant(request_validator=self.mock_validator)
 
@@ -54,11 +53,11 @@ class AuthorizationCodeGrantTest(TestCase):
         self.auth.custom_validators.pre_auth.append(self.authval1)
         self.auth.custom_validators.post_auth.append(self.authval2)
 
-    def test_custom_auth_validators(self):
+    async def test_custom_auth_validators(self):
         self.setup_validators()
 
         bearer = BearerToken(self.mock_validator)
-        self.auth.create_authorization_response(self.request, bearer)
+        await self.auth.create_authorization_response(self.request, bearer)
         self.assertTrue(self.authval1.called)
         self.assertTrue(self.authval2.called)
         self.assertFalse(self.tknval1.called)
@@ -85,6 +84,7 @@ class AuthorizationCodeGrantTest(TestCase):
         self.assertTrue(self.mock_validator.validate_scopes.called)
 
     async def test_create_authorization_grant_no_scopes(self):
+        self.mock_validator.get_default_scopes.return_value = None
         bearer = BearerToken(self.mock_validator)
         self.request.response_mode = 'query'
         self.request.scopes = []
@@ -153,9 +153,8 @@ class AuthorizationCodeGrantTest(TestCase):
 
     async def test_invalid_request(self):
         del self.request.code
-        self.assertRaises(
-            errors.InvalidRequestError, self.auth.validate_token_request, self.request
-        )
+        with self.assertRaises(errors.InvalidRequestError):
+            await self.auth.validate_token_request(self.request)
 
     async def test_invalid_request_duplicates(self):
         request = mock.MagicMock(wraps=self.request)
@@ -176,9 +175,8 @@ class AuthorizationCodeGrantTest(TestCase):
     async def test_authenticate_client(self):
         self.mock_validator.authenticate_client.side_effect = None
         self.mock_validator.authenticate_client.return_value = False
-        self.assertRaises(
-            errors.InvalidClientError, self.auth.validate_token_request, self.request
-        )
+        with self.assertRaises(errors.InvalidClientError):
+            await self.auth.validate_token_request(self.request)
 
     async def test_client_id_missing(self):
         self.mock_validator.authenticate_client.side_effect = None
@@ -190,7 +188,7 @@ class AuthorizationCodeGrantTest(TestCase):
 
     async def test_invalid_grant(self):
         self.request.client = 'batman'
-        self.mock_validator.authenticate_client = self.set_client
+        self.mock_validator.authenticate_client.return_value = self.set_client
         self.mock_validator.validate_code.return_value = False
         with self.assertRaises(errors.InvalidGrantError):
             await self.auth.validate_token_request(self.request)
@@ -216,7 +214,7 @@ class AuthorizationCodeGrantTest(TestCase):
     async def test_pkce_challenge_missing(self):
         self.mock_validator.is_pkce_required.return_value = True
         with self.assertRaises(errors.MissingCodeChallengeError):
-            self.auth.validate_authorization_request(self.request)
+            await self.auth.validate_authorization_request(self.request)
 
     async def test_pkce_default_method(self):
         for required in [True, False]:
@@ -339,19 +337,21 @@ class AuthorizationCodeGrantTest(TestCase):
             )
         )
 
-    def test_code_modifier_called(self):
+    async def test_code_modifier_called(self):
         bearer = BearerToken(self.mock_validator)
-        code_modifier = mock.MagicMock(wraps=lambda grant, *a: grant)
+
+        code_modifier = mock.AsyncMock(wraps=lambda grant, *a: grant)
         self.auth.register_code_modifier(code_modifier)
-        self.auth.create_authorization_response(self.request, bearer)
+        await self.auth.create_authorization_response(self.request, bearer)
         code_modifier.assert_called_once()
 
-    def test_hybrid_token_save(self):
+    async def test_hybrid_token_save(self):
         bearer = BearerToken(self.mock_validator)
-        self.auth.register_code_modifier(
-            lambda grant, *a: dict(list(grant.items()) + [('access_token', 1)])
+        code_modifier = mock.AsyncMock(
+            wraps=lambda grant, *a: dict(list(grant.items()) + [('access_token', 1)])
         )
-        self.auth.create_authorization_response(self.request, bearer)
+        self.auth.register_code_modifier(code_modifier)
+        await self.auth.create_authorization_response(self.request, bearer)
         self.mock_validator.save_token.assert_called_once()
 
     # CORS
@@ -361,7 +361,7 @@ class AuthorizationCodeGrantTest(TestCase):
         self.request.headers['origin'] = 'https://foo.bar'
         self.mock_validator.is_origin_allowed.return_value = True
 
-        headers = await self.auth.create_token_response(self.request, bearer)[0]
+        headers = (await self.auth.create_token_response(self.request, bearer))[0]
         self.assertEqual(headers['Access-Control-Allow-Origin'], 'https://foo.bar')
         self.mock_validator.is_origin_allowed.assert_called_once_with(
             'abcdef', 'https://foo.bar', self.request
@@ -369,7 +369,7 @@ class AuthorizationCodeGrantTest(TestCase):
 
     async def test_create_cors_headers_no_origin(self):
         bearer = BearerToken(self.mock_validator)
-        headers = await self.auth.create_token_response(self.request, bearer)[0]
+        headers = (await self.auth.create_token_response(self.request, bearer))[0]
         self.assertNotIn('Access-Control-Allow-Origin', headers)
         self.mock_validator.is_origin_allowed.assert_not_called()
 
@@ -377,7 +377,7 @@ class AuthorizationCodeGrantTest(TestCase):
         bearer = BearerToken(self.mock_validator)
         self.request.headers['origin'] = 'http://foo.bar'
 
-        headers = await self.auth.create_token_response(self.request, bearer)[0]
+        headers = (await self.auth.create_token_response(self.request, bearer))[0]
         self.assertNotIn('Access-Control-Allow-Origin', headers)
         self.mock_validator.is_origin_allowed.assert_not_called()
 
@@ -386,7 +386,7 @@ class AuthorizationCodeGrantTest(TestCase):
         self.request.headers['origin'] = 'https://foo.bar'
         self.mock_validator.is_origin_allowed.return_value = False
 
-        headers = await self.auth.create_token_response(self.request, bearer)[0]
+        headers = (await self.auth.create_token_response(self.request, bearer))[0]
         self.assertNotIn('Access-Control-Allow-Origin', headers)
         self.mock_validator.is_origin_allowed.assert_called_once_with(
             'abcdef', 'https://foo.bar', self.request

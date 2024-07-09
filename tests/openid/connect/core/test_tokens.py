@@ -7,7 +7,7 @@ from tests.unittest import TestCase
 
 class JWTTokenTestCase(TestCase):
 
-    def test_create_token_callable_expires_in(self):
+    async def test_create_token_callable_expires_in(self):
         """
         Test retrieval of the expires in value by calling the callable expires_in property
         """
@@ -16,11 +16,11 @@ class JWTTokenTestCase(TestCase):
         request_mock = mock.MagicMock()
 
         token = JWTToken(expires_in=expires_in_mock, request_validator=mock.MagicMock())
-        token.create_token(request=request_mock)
+        await token.create_token(request=request_mock)
 
         expires_in_mock.assert_called_once_with(request_mock)
 
-    def test_create_token_non_callable_expires_in(self):
+    async def test_create_token_non_callable_expires_in(self):
         """
         When a non callable expires in is set this should just be set to the request
         """
@@ -29,12 +29,12 @@ class JWTTokenTestCase(TestCase):
         request_mock = mock.MagicMock()
 
         token = JWTToken(expires_in=expires_in_mock, request_validator=mock.MagicMock())
-        token.create_token(request=request_mock)
+        await token.create_token(request=request_mock)
 
         self.assertFalse(expires_in_mock.called)
         self.assertEqual(request_mock.expires_in, expires_in_mock)
 
-    def test_create_token_calls_get_id_token(self):
+    async def test_create_token_calls_get_id_token(self):
         """
         When create_token is called the call should be forwarded to the get_id_token on the token validator
         """
@@ -46,7 +46,7 @@ class JWTTokenTestCase(TestCase):
             request_validator = RequestValidatorMock()
 
             token = JWTToken(expires_in=mock.MagicMock(), request_validator=request_validator)
-            token.create_token(request=request_mock)
+            await token.create_token(request=request_mock)
 
             request_validator.get_jwt_bearer_token.assert_called_once_with(None, None, request_mock)
 

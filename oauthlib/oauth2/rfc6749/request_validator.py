@@ -95,7 +95,7 @@ class RequestValidator:
         """
         raise NotImplementedError('Subclasses must implement this method.')
 
-    def confirm_redirect_uri(
+    async def confirm_redirect_uri(
         self, client_id, code, redirect_uri, client, request, *args, **kwargs
     ):
         """Ensure that the authorization process represented by this authorization
@@ -120,7 +120,7 @@ class RequestValidator:
         """
         raise NotImplementedError('Subclasses must implement this method.')
 
-    def get_default_redirect_uri(self, client_id, request, *args, **kwargs):
+    async def get_default_redirect_uri(self, client_id, request, *args, **kwargs):
         """Get the default redirect URI for the client.
 
         :param client_id: Unicode client identifier.
@@ -134,7 +134,7 @@ class RequestValidator:
         """
         raise NotImplementedError('Subclasses must implement this method.')
 
-    def get_default_scopes(self, client_id, request, *args, **kwargs):
+    async def get_default_scopes(self, client_id, request, *args, **kwargs):
         """Get the default scopes for the client.
 
         :param client_id: Unicode client identifier.
@@ -150,7 +150,7 @@ class RequestValidator:
         """
         raise NotImplementedError('Subclasses must implement this method.')
 
-    def get_original_scopes(self, refresh_token, request, *args, **kwargs):
+    async def get_original_scopes(self, refresh_token, request, *args, **kwargs):
         """Get the list of scopes associated with the refresh token.
 
         :param refresh_token: Unicode refresh token.
@@ -163,7 +163,7 @@ class RequestValidator:
         """
         raise NotImplementedError('Subclasses must implement this method.')
 
-    def is_within_original_scope(
+    async def is_within_original_scope(
         self, request_scopes, refresh_token, request, *args, **kwargs
     ):
         """Check if requested scopes are within a scope of the refresh token.
@@ -187,7 +187,7 @@ class RequestValidator:
         """
         return False
 
-    def introspect_token(self, token, token_type_hint, request, *args, **kwargs):
+    async def introspect_token(self, token, token_type_hint, request, *args, **kwargs):
         """Introspect an access or refresh token.
 
         Called once the introspect request is validated. This method should
@@ -475,7 +475,7 @@ class RequestValidator:
         """
         raise NotImplementedError('Subclasses must implement this method.')
 
-    def validate_grant_type(
+    async def validate_grant_type(
         self, client_id, grant_type, client, request, *args, **kwargs
     ):
         """Ensure client is authorized to use the grant_type requested.
@@ -495,7 +495,9 @@ class RequestValidator:
         """
         raise NotImplementedError('Subclasses must implement this method.')
 
-    def validate_redirect_uri(self, client_id, redirect_uri, request, *args, **kwargs):
+    async def validate_redirect_uri(
+        self, client_id, redirect_uri, request, *args, **kwargs
+    ):
         """Ensure client is authorized to redirect to the redirect_uri requested.
 
         All clients should register the absolute URIs of all URIs they intend
@@ -534,7 +536,7 @@ class RequestValidator:
         """
         raise NotImplementedError('Subclasses must implement this method.')
 
-    def validate_response_type(
+    async def validate_response_type(
         self, client_id, response_type, client, request, *args, **kwargs
     ):
         """Ensure client is authorized to use the response_type requested.
@@ -552,7 +554,9 @@ class RequestValidator:
         """
         raise NotImplementedError('Subclasses must implement this method.')
 
-    def validate_scopes(self, client_id, scopes, client, request, *args, **kwargs):
+    async def validate_scopes(
+        self, client_id, scopes, client, request, *args, **kwargs
+    ):
         """Ensure the client is authorized access to requested scopes.
 
         :param client_id: Unicode client identifier.
@@ -590,7 +594,7 @@ class RequestValidator:
         """
         raise NotImplementedError('Subclasses must implement this method.')
 
-    def is_pkce_required(self, client_id, request):
+    async def is_pkce_required(self, client_id, request):
         """Determine if current request requires PKCE. Default, False.
         This is called for both "authorization" and "token" requests.
 
@@ -616,7 +620,7 @@ class RequestValidator:
         """
         return False
 
-    def get_code_challenge(self, code, request):
+    async def get_code_challenge(self, code, request):
         """Is called for every "token" requests.
 
         When the server issues the authorization code in the authorization
@@ -645,7 +649,7 @@ class RequestValidator:
         """
         return None
 
-    def get_code_challenge_method(self, code, request):
+    async def get_code_challenge_method(self, code, request):
         """Is called during the "token" request processing, when a
         ``code_verifier`` and a ``code_challenge`` has been provided.
 
@@ -665,7 +669,7 @@ class RequestValidator:
         """
         raise NotImplementedError('Subclasses must implement this method.')
 
-    def is_origin_allowed(self, client_id, origin, request, *args, **kwargs):
+    async def is_origin_allowed(self, client_id, origin, request, *args, **kwargs):
         """Indicate if the given origin is allowed to access the token endpoint
         via Cross-Origin Resource Sharing (CORS).  CORS is used by browser-based
         clients, such as Single-Page Applications, to perform the Authorization

@@ -36,7 +36,7 @@ class RevocationEndpoint(BaseEndpoint):
         self.enable_jsonp = enable_jsonp
 
     @catch_errors_and_unavailability
-    def create_revocation_response(self, uri, http_method='POST', body=None,
+    async def create_revocation_response(self, uri, http_method='POST', body=None,
                                    headers=None):
         """Revoke supplied access or refresh token.
 
@@ -64,7 +64,7 @@ class RevocationEndpoint(BaseEndpoint):
         request = Request(
             uri, http_method=http_method, body=body, headers=headers)
         try:
-            self.validate_revocation_request(request)
+            await self.validate_revocation_request(request)
             log.debug('Token revocation valid for %r.', request)
         except OAuth2Error as e:
             log.debug('Client error during validation of %r. %r.', request, e)
@@ -74,15 +74,14 @@ class RevocationEndpoint(BaseEndpoint):
             resp_headers.update(e.headers)
             return resp_headers, response_body, e.status_code
 
-        self.request_validator.revoke_token(request.token,
-                                            request.token_type_hint, request)
+        await self.request_validator.revoke_token(request.token, request.token_type_hint, request)
 
         response_body = ''
         if self.enable_jsonp and request.callback:
             response_body = request.callback + '();'
         return {}, response_body, 200
 
-    def validate_revocation_request(self, request):
+    async def validate_revocation_request(self, request):
         """Ensure the request is valid.
 
         The client constructs the request by including the following parameters
@@ -122,5 +121,5 @@ class RevocationEndpoint(BaseEndpoint):
         self._raise_on_bad_method(request)
         self._raise_on_bad_post_request(request)
         self._raise_on_missing_token(request)
-        self._raise_on_invalid_client(request)
+        await self._raise_on_invalid_client(request)
         self._raise_on_unsupported_token(request)

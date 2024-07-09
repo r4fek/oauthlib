@@ -1,5 +1,5 @@
 import urllib.parse as urlparse
-from unittest import TestCase, IsolatedAsyncioTestCase
+from unittest import IsolatedAsyncioTestCase as TestCase
 
 
 # URL comparison where query param order is insignificant
@@ -29,4 +29,5 @@ TestCase.assertURLEqual = url_equals
 
 # Form body comparison where order is insignificant
 TestCase.assertFormBodyEqual = lambda self, a, b: self.assertCountEqual(
-        urlparse.parse_qsl(a), urlparse.parse_qsl(b))
+    urlparse.parse_qsl(a), urlparse.parse_qsl(b)
+)

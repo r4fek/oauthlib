@@ -58,14 +58,14 @@ class RefreshTokenGrant(GrantTypeBase):
             headers.update(e.headers)
             return headers, e.json, e.status_code
 
-        token = token_handler.create_token(
+        token = await token_handler.create_token(
             request, refresh_token=self.issue_new_refresh_tokens
         )
 
         for modifier in self._token_modifiers:
-            token = modifier(token, token_handler, request)
+            token = await modifier(token, token_handler, request)
 
-        self.request_validator.save_token(token, request)
+        await self.request_validator.save_token(token, request)
 
         log.debug(
             'Issuing new token to client id %r (%r), %r.',
@@ -73,7 +73,7 @@ class RefreshTokenGrant(GrantTypeBase):
             request.client,
             token,
         )
-        headers.update(self._create_cors_headers(request))
+        headers.update(await self._create_cors_headers(request))
         return headers, json.dumps(token), 200
 
     async def validate_token_request(self, request):
@@ -115,7 +115,7 @@ class RefreshTokenGrant(GrantTypeBase):
             raise errors.InvalidClientError(request=request)
 
         # Ensure client is authorized use of this grant type
-        self.validate_grant_type(request)
+        await self.validate_grant_type(request)
 
         # REQUIRED. The refresh token issued to the client.
         log.debug(
@@ -123,7 +123,7 @@ class RefreshTokenGrant(GrantTypeBase):
             request.refresh_token,
             request.client,
         )
-        if not self.request_validator.validate_refresh_token(
+        if not await self.request_validator.validate_refresh_token(
             request.refresh_token, request.client, request
         ):
             log.debug(
@@ -134,14 +134,16 @@ class RefreshTokenGrant(GrantTypeBase):
             raise errors.InvalidGrantError(request=request)
 
         original_scopes = utils.scope_to_list(
-            self.request_validator.get_original_scopes(request.refresh_token, request)
+            await self.request_validator.get_original_scopes(
+                request.refresh_token, request
+            )
         )
 
         if request.scope:
             request.scopes = utils.scope_to_list(request.scope)
             if not all(
                 s in original_scopes for s in request.scopes
-            ) and not self.request_validator.is_within_original_scope(
+            ) and not await self.request_validator.is_within_original_scope(
                 request.scopes, request.refresh_token, request
             ):
                 log.debug(

@@ -11,7 +11,9 @@ from oauthlib.oauth2.rfc6749.endpoints.authorization import (
 from oauthlib.oauth2.rfc6749.endpoints.resource import ResourceEndpoint
 from oauthlib.oauth2.rfc6749.endpoints.token import TokenEndpoint
 from oauthlib.oauth2.rfc6749.grant_types import (
-    AuthorizationCodeGrant, ClientCredentialsGrant, ImplicitGrant,
+    AuthorizationCodeGrant,
+    ClientCredentialsGrant,
+    ImplicitGrant,
     ResourceOwnerPasswordCredentialsGrant,
 )
 
@@ -21,89 +23,105 @@ from tests.unittest import TestCase
 class AuthorizationEndpointTest(TestCase):
 
     def setUp(self):
-        self.mock_validator = mock.MagicMock()
+        self.mock_validator = mock.AsyncMock()
         self.mock_validator.get_code_challenge.return_value = None
-        self.addCleanup(setattr, self, 'mock_validator', mock.MagicMock())
-        auth_code = AuthorizationCodeGrant(
-            request_validator=self.mock_validator)
-        auth_code.save_authorization_code = mock.MagicMock()
-        implicit = ImplicitGrant(
-            request_validator=self.mock_validator)
-        implicit.save_token = mock.MagicMock()
+        self.addCleanup(setattr, self, 'mock_validator', mock.AsyncMock())
+        auth_code = AuthorizationCodeGrant(request_validator=self.mock_validator)
+        auth_code.save_authorization_code = mock.AsyncMock()
+        implicit = ImplicitGrant(request_validator=self.mock_validator)
+        implicit.save_token = mock.AsyncMock()
 
-        response_types = {
-            'code': auth_code,
-            'token': implicit,
-            'none': auth_code
-        }
+        response_types = {'code': auth_code, 'token': implicit, 'none': auth_code}
         self.expires_in = 1800
-        token = tokens.BearerToken(
-            self.mock_validator,
-            expires_in=self.expires_in
-        )
+        token = tokens.BearerToken(self.mock_validator, expires_in=self.expires_in)
         self.endpoint = AuthorizationEndpoint(
             default_response_type='code',
             default_token_type=token,
-            response_types=response_types
+            response_types=response_types,
         )
 
     @mock.patch('oauthlib.common.generate_token', new=lambda: 'abc')
-    def test_authorization_grant(self):
+    async def test_authorization_grant(self):
         uri = 'http://i.b/l?response_type=code&client_id=me&scope=all+of+them&state=xyz'
         uri += '&redirect_uri=http%3A%2F%2Fback.to%2Fme'
-        headers, body, status_code = self.endpoint.create_authorization_response(
-            uri, scopes=['all', 'of', 'them'])
+        headers, body, status_code = await self.endpoint.create_authorization_response(
+            uri, scopes=['all', 'of', 'them']
+        )
         self.assertIn('Location', headers)
         self.assertURLEqual(headers['Location'], 'http://back.to/me?code=abc&state=xyz')
 
     @mock.patch('oauthlib.common.generate_token', new=lambda: 'abc')
-    def test_implicit_grant(self):
-        uri = 'http://i.b/l?response_type=token&client_id=me&scope=all+of+them&state=xyz'
+    async def test_implicit_grant(self):
+        uri = (
+            'http://i.b/l?response_type=token&client_id=me&scope=all+of+them&state=xyz'
+        )
         uri += '&redirect_uri=http%3A%2F%2Fback.to%2Fme'
-        headers, body, status_code = self.endpoint.create_authorization_response(
-            uri, scopes=['all', 'of', 'them'])
+        headers, body, status_code = await self.endpoint.create_authorization_response(
+            uri, scopes=['all', 'of', 'them']
+        )
         self.assertIn('Location', headers)
-        self.assertURLEqual(headers['Location'], 'http://back.to/me#access_token=abc&expires_in=' + str(self.expires_in) + '&token_type=Bearer&state=xyz&scope=all+of+them', parse_fragment=True)
+        self.assertURLEqual(
+            headers['Location'],
+            'http://back.to/me#access_token=abc&expires_in='
+            + str(self.expires_in)
+            + '&token_type=Bearer&state=xyz&scope=all+of+them',
+            parse_fragment=True,
+        )
 
-    def test_none_grant(self):
+    async def test_none_grant(self):
         uri = 'http://i.b/l?response_type=none&client_id=me&scope=all+of+them&state=xyz'
         uri += '&redirect_uri=http%3A%2F%2Fback.to%2Fme'
-        headers, body, status_code = self.endpoint.create_authorization_response(
-            uri, scopes=['all', 'of', 'them'])
+        headers, body, status_code = await self.endpoint.create_authorization_response(
+            uri, scopes=['all', 'of', 'them']
+        )
         self.assertIn('Location', headers)
-        self.assertURLEqual(headers['Location'], 'http://back.to/me?state=xyz', parse_fragment=True)
+        self.assertURLEqual(
+            headers['Location'], 'http://back.to/me?state=xyz', parse_fragment=True
+        )
         self.assertIsNone(body)
         self.assertEqual(status_code, 302)
 
         # and without the state parameter
         uri = 'http://i.b/l?response_type=none&client_id=me&scope=all+of+them'
         uri += '&redirect_uri=http%3A%2F%2Fback.to%2Fme'
-        headers, body, status_code = self.endpoint.create_authorization_response(
-            uri, scopes=['all', 'of', 'them'])
+        headers, body, status_code = await self.endpoint.create_authorization_response(
+            uri, scopes=['all', 'of', 'them']
+        )
         self.assertIn('Location', headers)
-        self.assertURLEqual(headers['Location'], 'http://back.to/me', parse_fragment=True)
+        self.assertURLEqual(
+            headers['Location'], 'http://back.to/me', parse_fragment=True
+        )
         self.assertIsNone(body)
         self.assertEqual(status_code, 302)
 
-    def test_missing_type(self):
+    async def test_missing_type(self):
         uri = 'http://i.b/l?client_id=me&scope=all+of+them'
         uri += '&redirect_uri=http%3A%2F%2Fback.to%2Fme'
-        self.mock_validator.validate_request = mock.MagicMock(
-            side_effect=errors.InvalidRequestError())
-        headers, body, status_code = self.endpoint.create_authorization_response(
-            uri, scopes=['all', 'of', 'them'])
+        self.mock_validator.validate_request = mock.AsyncMock(
+            side_effect=errors.InvalidRequestError()
+        )
+        headers, body, status_code = await self.endpoint.create_authorization_response(
+            uri, scopes=['all', 'of', 'them']
+        )
         self.assertIn('Location', headers)
-        self.assertURLEqual(headers['Location'], 'http://back.to/me?error=invalid_request&error_description=Missing+response_type+parameter.')
+        self.assertURLEqual(
+            headers['Location'],
+            'http://back.to/me?error=invalid_request&error_description=Missing+response_type+parameter.',
+        )
 
-    def test_invalid_type(self):
+    async def test_invalid_type(self):
         uri = 'http://i.b/l?response_type=invalid&client_id=me&scope=all+of+them'
         uri += '&redirect_uri=http%3A%2F%2Fback.to%2Fme'
-        self.mock_validator.validate_request = mock.MagicMock(
-            side_effect=errors.UnsupportedResponseTypeError())
-        headers, body, status_code = self.endpoint.create_authorization_response(
-            uri, scopes=['all', 'of', 'them'])
+        self.mock_validator.validate_request = mock.AsyncMock(
+            side_effect=errors.UnsupportedResponseTypeError()
+        )
+        headers, body, status_code = await self.endpoint.create_authorization_response(
+            uri, scopes=['all', 'of', 'them']
+        )
         self.assertIn('Location', headers)
-        self.assertURLEqual(headers['Location'], 'http://back.to/me?error=unsupported_response_type')
+        self.assertURLEqual(
+            headers['Location'], 'http://back.to/me?error=unsupported_response_type'
+        )
 
 
 class TokenEndpointTest(TestCase):
@@ -115,68 +133,66 @@ class TokenEndpointTest(TestCase):
             request.client.client_id = 'mocked_client_id'
             return True
 
-        self.mock_validator = mock.MagicMock()
+        self.mock_validator = mock.AsyncMock()
         self.mock_validator.authenticate_client.side_effect = set_user
         self.mock_validator.get_code_challenge.return_value = None
-        self.addCleanup(setattr, self, 'mock_validator', mock.MagicMock())
-        auth_code = AuthorizationCodeGrant(
-            request_validator=self.mock_validator)
+        self.addCleanup(setattr, self, 'mock_validator', mock.AsyncMock())
+        auth_code = AuthorizationCodeGrant(request_validator=self.mock_validator)
         password = ResourceOwnerPasswordCredentialsGrant(
-            request_validator=self.mock_validator)
-        client = ClientCredentialsGrant(
-            request_validator=self.mock_validator)
+            request_validator=self.mock_validator
+        )
+        client = ClientCredentialsGrant(request_validator=self.mock_validator)
         supported_types = {
             'authorization_code': auth_code,
             'password': password,
             'client_credentials': client,
         }
         self.expires_in = 1800
-        token = tokens.BearerToken(
-            self.mock_validator,
-            expires_in=self.expires_in
-        )
+        token = tokens.BearerToken(self.mock_validator, expires_in=self.expires_in)
         self.endpoint = TokenEndpoint(
-            'authorization_code',
-            default_token_type=token,
-            grant_types=supported_types
+            'authorization_code', default_token_type=token, grant_types=supported_types
         )
 
     @mock.patch('oauthlib.common.generate_token', new=lambda: 'abc')
-    def test_authorization_grant(self):
+    async def test_authorization_grant(self):
         body = 'grant_type=authorization_code&code=abc&scope=all+of+them'
-        headers, body, status_code = self.endpoint.create_token_response(
-            '', body=body)
+        headers, body, status_code = await self.endpoint.create_token_response(
+            '', body=body
+        )
         token = {
             'token_type': 'Bearer',
             'expires_in': self.expires_in,
             'access_token': 'abc',
             'refresh_token': 'abc',
-            'scope': 'all of them'
+            'scope': 'all of them',
         }
         self.assertEqual(json.loads(body), token)
 
         body = 'grant_type=authorization_code&code=abc'
-        headers, body, status_code = self.endpoint.create_token_response(
-            '', body=body)
+        headers, body, status_code = await self.endpoint.create_token_response(
+            '', body=body
+        )
         token = {
             'token_type': 'Bearer',
             'expires_in': self.expires_in,
             'access_token': 'abc',
-            'refresh_token': 'abc'
+            'refresh_token': 'abc',
         }
         self.assertEqual(json.loads(body), token)
 
         # try with additional custom variables
         body = 'grant_type=authorization_code&code=abc&state=foobar'
-        headers, body, status_code = self.endpoint.create_token_response(
-            '', body=body)
+        headers, body, status_code = await self.endpoint.create_token_response(
+            '', body=body
+        )
         self.assertEqual(json.loads(body), token)
 
     @mock.patch('oauthlib.common.generate_token', new=lambda: 'abc')
-    def test_password_grant(self):
+    async def test_password_grant(self):
         body = 'grant_type=password&username=a&password=hello&scope=all+of+them'
-        headers, body, status_code = self.endpoint.create_token_response(
-            '', body=body)
+        headers, body, status_code = await self.endpoint.create_token_response(
+            '', body=body
+        )
         token = {
             'token_type': 'Bearer',
             'expires_in': self.expires_in,
@@ -187,10 +203,11 @@ class TokenEndpointTest(TestCase):
         self.assertEqual(json.loads(body), token)
 
     @mock.patch('oauthlib.common.generate_token', new=lambda: 'abc')
-    def test_client_grant(self):
+    async def test_client_grant(self):
         body = 'grant_type=client_credentials&scope=all+of+them'
-        headers, body, status_code = self.endpoint.create_token_response(
-            '', body=body)
+        headers, body, status_code = await self.endpoint.create_token_response(
+            '', body=body
+        )
         token = {
             'token_type': 'Bearer',
             'expires_in': self.expires_in,
@@ -199,14 +216,14 @@ class TokenEndpointTest(TestCase):
         }
         self.assertEqual(json.loads(body), token)
 
-    def test_missing_type(self):
-        _, body, _ = self.endpoint.create_token_response('', body='')
+    async def test_missing_type(self):
+        _, body, _ = await self.endpoint.create_token_response('', body='')
         token = {'error': 'unsupported_grant_type'}
         self.assertEqual(json.loads(body), token)
 
-    def test_invalid_type(self):
+    async def test_invalid_type(self):
         body = 'grant_type=invalid'
-        _, body, _ = self.endpoint.create_token_response('', body=body)
+        _, body, _ = await self.endpoint.create_token_response('', body=body)
         token = {'error': 'unsupported_grant_type'}
         self.assertEqual(json.loads(body), token)
 
@@ -222,10 +239,10 @@ class SignedTokenEndpointTest(TestCase):
             request.client.client_id = 'mocked_client_id'
             return True
 
-        self.mock_validator = mock.MagicMock()
+        self.mock_validator = mock.AsyncMock()
         self.mock_validator.get_code_challenge.return_value = None
         self.mock_validator.authenticate_client.side_effect = set_user
-        self.addCleanup(setattr, self, 'mock_validator', mock.MagicMock())
+        self.addCleanup(setattr, self, 'mock_validator', mock.AsyncMock())
 
         self.private_pem = """
 -----BEGIN RSA PRIVATE KEY-----
@@ -269,60 +286,63 @@ twIDAQAB
 -----END PUBLIC KEY-----
         """
 
-        signed_token = tokens.signed_token_generator(self.private_pem,
-                                                     user_id=123)
+        signed_token = tokens.signed_token_generator(self.private_pem, user_id=123)
         self.endpoint = Server(
             self.mock_validator,
             token_expires_in=self.expires_in,
             token_generator=signed_token,
-            refresh_token_generator=tokens.random_token_generator
+            refresh_token_generator=tokens.random_token_generator,
         )
 
     @mock.patch('oauthlib.common.generate_token', new=lambda: 'abc')
-    def test_authorization_grant(self):
+    async def test_authorization_grant(self):
         body = 'client_id=me&redirect_uri=http%3A%2F%2Fback.to%2Fme&grant_type=authorization_code&code=abc&scope=all+of+them'
-        headers, body, status_code = self.endpoint.create_token_response(
-            '', body=body)
+        headers, body, status_code = await self.endpoint.create_token_response(
+            '', body=body
+        )
         body = json.loads(body)
         token = {
             'token_type': 'Bearer',
             'expires_in': self.expires_in,
             'access_token': body['access_token'],
             'refresh_token': 'abc',
-            'scope': 'all of them'
+            'scope': 'all of them',
         }
         self.assertEqual(body, token)
 
         body = 'client_id=me&redirect_uri=http%3A%2F%2Fback.to%2Fme&grant_type=authorization_code&code=abc'
-        headers, body, status_code = self.endpoint.create_token_response(
-            '', body=body)
+        headers, body, status_code = await self.endpoint.create_token_response(
+            '', body=body
+        )
         body = json.loads(body)
         token = {
             'token_type': 'Bearer',
             'expires_in': self.expires_in,
             'access_token': body['access_token'],
-            'refresh_token': 'abc'
+            'refresh_token': 'abc',
         }
         self.assertEqual(body, token)
 
         # try with additional custom variables
         body = 'client_id=me&redirect_uri=http%3A%2F%2Fback.to%2Fme&grant_type=authorization_code&code=abc&state=foobar'
-        headers, body, status_code = self.endpoint.create_token_response(
-            '', body=body)
+        headers, body, status_code = await self.endpoint.create_token_response(
+            '', body=body
+        )
         body = json.loads(body)
         token = {
             'token_type': 'Bearer',
             'expires_in': self.expires_in,
             'access_token': body['access_token'],
-            'refresh_token': 'abc'
+            'refresh_token': 'abc',
         }
         self.assertEqual(body, token)
 
     @mock.patch('oauthlib.common.generate_token', new=lambda: 'abc')
-    def test_password_grant(self):
+    async def test_password_grant(self):
         body = 'grant_type=password&username=a&password=hello&scope=all+of+them'
-        headers, body, status_code = self.endpoint.create_token_response(
-            '', body=body)
+        headers, body, status_code = await self.endpoint.create_token_response(
+            '', body=body
+        )
         body = json.loads(body)
         token = {
             'token_type': 'Bearer',
@@ -334,10 +354,11 @@ twIDAQAB
         self.assertEqual(body, token)
 
     @mock.patch('oauthlib.common.generate_token', new=lambda: 'abc')
-    def test_scopes_and_user_id_stored_in_access_token(self):
+    async def test_scopes_and_user_id_stored_in_access_token(self):
         body = 'grant_type=password&username=a&password=hello&scope=all+of+them'
-        headers, body, status_code = self.endpoint.create_token_response(
-            '', body=body)
+        headers, body, status_code = await self.endpoint.create_token_response(
+            '', body=body
+        )
 
         access_token = json.loads(body)['access_token']
 
@@ -347,10 +368,11 @@ twIDAQAB
         self.assertEqual(claims['user_id'], 123)
 
     @mock.patch('oauthlib.common.generate_token', new=lambda: 'abc')
-    def test_client_grant(self):
+    async def test_client_grant(self):
         body = 'grant_type=client_credentials&scope=all+of+them'
-        headers, body, status_code = self.endpoint.create_token_response(
-            '', body=body)
+        headers, body, status_code = await self.endpoint.create_token_response(
+            '', body=body
+        )
         body = json.loads(body)
         token = {
             'token_type': 'Bearer',
@@ -360,14 +382,16 @@ twIDAQAB
         }
         self.assertEqual(body, token)
 
-    def test_missing_type(self):
-        _, body, _ = self.endpoint.create_token_response('', body='client_id=me&redirect_uri=http%3A%2F%2Fback.to%2Fme&code=abc')
+    async def test_missing_type(self):
+        _, body, _ = await self.endpoint.create_token_response(
+            '', body='client_id=me&redirect_uri=http%3A%2F%2Fback.to%2Fme&code=abc'
+        )
         token = {'error': 'unsupported_grant_type'}
         self.assertEqual(json.loads(body), token)
 
-    def test_invalid_type(self):
+    async def test_invalid_type(self):
         body = 'client_id=me&redirect_uri=http%3A%2F%2Fback.to%2Fme&grant_type=invalid&code=abc'
-        _, body, _ = self.endpoint.create_token_response('', body=body)
+        _, body, _ = await self.endpoint.create_token_response('', body=body)
         token = {'error': 'unsupported_grant_type'}
         self.assertEqual(json.loads(body), token)
 
@@ -375,17 +399,16 @@ twIDAQAB
 class ResourceEndpointTest(TestCase):
 
     def setUp(self):
-        self.mock_validator = mock.MagicMock()
-        self.addCleanup(setattr, self, 'mock_validator', mock.MagicMock())
+        self.mock_validator = mock.AsyncMock()
+        self.addCleanup(setattr, self, 'mock_validator', mock.AsyncMock())
         token = tokens.BearerToken(request_validator=self.mock_validator)
         self.endpoint = ResourceEndpoint(
-            default_token='Bearer',
-            token_types={'Bearer': token}
+            default_token='Bearer', token_types={'Bearer': token}
         )
 
-    def test_defaults(self):
+    async def test_defaults(self):
         uri = 'http://a.b/path?some=query'
         self.mock_validator.validate_bearer_token.return_value = False
-        valid, request = self.endpoint.verify_request(uri)
+        valid, request = await self.endpoint.verify_request(uri)
         self.assertFalse(valid)
         self.assertEqual(request.token_type, 'Bearer')

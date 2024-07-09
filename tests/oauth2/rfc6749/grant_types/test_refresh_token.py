@@ -1,15 +1,12 @@
 # -*- coding: utf-8 -*-
 import json
 from unittest import mock
-import pytest
 from oauthlib.common import Request
 from oauthlib.oauth2.rfc6749 import errors
 from oauthlib.oauth2.rfc6749.grant_types import RefreshTokenGrant
 from oauthlib.oauth2.rfc6749.tokens import BearerToken
 
 from tests.unittest import TestCase
-
-pytestmark = pytest.mark.asyncio
 
 
 class RefreshTokenGrantTest(TestCase):
@@ -24,6 +21,7 @@ class RefreshTokenGrantTest(TestCase):
         self.request.client = mock_client
         self.request.scope = 'foo'
         self.mock_validator = mock.AsyncMock()
+        self.mock_validator.get_original_scopes = mock.AsyncMock()
         self.auth = RefreshTokenGrant(request_validator=self.mock_validator)
 
     async def test_create_token_response(self):
@@ -60,6 +58,7 @@ class RefreshTokenGrantTest(TestCase):
         tknval1, tknval2 = mock.Mock(), mock.Mock()
         self.auth.custom_validators.pre_token.append(tknval1)
         self.auth.custom_validators.post_token.append(tknval2)
+        self.mock_validator.get_original_scopes.return_value = ['foo', 'bar']
 
         bearer = BearerToken(self.mock_validator)
         await self.auth.create_token_response(self.request, bearer)
@@ -149,6 +148,7 @@ class RefreshTokenGrantTest(TestCase):
         """
         self.mock_validator.client_authentication_required.return_value = True
         self.mock_validator.authenticate_client.return_value = True
+        self.mock_validator.get_original_scopes.return_value = ['foo', 'bar']
         # self.mock_validator.authenticate_client_id.return_value = False
         # self.request.code = 'waffles'
         self.request.client_id = None
@@ -182,12 +182,12 @@ class RefreshTokenGrantTest(TestCase):
     async def test_invalid_scope_original_scopes_empty(self):
         self.mock_validator.validate_refresh_token.return_value = True
         self.mock_validator.is_within_original_scope.return_value = False
+        self.mock_validator.get_original_scopes.return_value = ""
         with self.assertRaises(errors.InvalidScopeError):
             await self.auth.validate_token_request(self.request)
 
     async def test_valid_token_request(self):
         self.request.scope = 'foo bar'
-        self.mock_validator.get_original_scopes = mock.Mock()
         self.mock_validator.get_original_scopes.return_value = 'foo bar baz'
         await self.auth.validate_token_request(self.request)
         self.assertEqual(self.request.scopes, self.request.scope.split())
@@ -199,36 +199,41 @@ class RefreshTokenGrantTest(TestCase):
     # CORS
 
     async def test_create_cors_headers(self):
+        self.mock_validator.get_original_scopes.return_value = 'foo bar baz'
         bearer = BearerToken(self.mock_validator)
         self.request.headers['origin'] = 'https://foo.bar'
         self.mock_validator.is_origin_allowed.return_value = True
 
-        headers = await self.auth.create_token_response(self.request, bearer)[0]
+        headers = (await self.auth.create_token_response(self.request, bearer))[0]
         self.assertEqual(headers['Access-Control-Allow-Origin'], 'https://foo.bar')
         self.mock_validator.is_origin_allowed.assert_called_once_with(
             'abcdef', 'https://foo.bar', self.request
         )
 
     async def test_create_cors_headers_no_origin(self):
+        self.mock_validator.get_original_scopes.return_value = 'foo bar baz'
         bearer = BearerToken(self.mock_validator)
-        headers = await self.auth.create_token_response(self.request, bearer)[0]
+        headers = (await self.auth.create_token_response(self.request, bearer))[0]
         self.assertNotIn('Access-Control-Allow-Origin', headers)
         self.mock_validator.is_origin_allowed.assert_not_called()
 
     async def test_create_cors_headers_insecure_origin(self):
+        self.mock_validator.get_original_scopes.return_value = 'foo bar baz'
         bearer = BearerToken(self.mock_validator)
         self.request.headers['origin'] = 'http://foo.bar'
 
-        headers = await self.auth.create_token_response(self.request, bearer)[0]
+        headers = (await self.auth.create_token_response(self.request, bearer))[0]
         self.assertNotIn('Access-Control-Allow-Origin', headers)
         self.mock_validator.is_origin_allowed.assert_not_called()
 
     async def test_create_cors_headers_invalid_origin(self):
+        self.mock_validator.get_original_scopes.return_value = 'foo bar baz'
         bearer = BearerToken(self.mock_validator)
         self.request.headers['origin'] = 'https://foo.bar'
         self.mock_validator.is_origin_allowed.return_value = False
 
-        headers = await self.auth.create_token_response(self.request, bearer)[0]
+        headers = (await self.auth.create_token_response(self.request, bearer))[0]
+        self.mock_validator.get_original_scopes.return_value = 'foo bar baz'
         self.assertNotIn('Access-Control-Allow-Origin', headers)
         self.mock_validator.is_origin_allowed.assert_called_once_with(
             'abcdef', 'https://foo.bar', self.request

@@ -1,11 +1,15 @@
 """Ensure all tokens are associated with a resource owner.
 """
+
 import json
 from unittest import mock
 
 from oauthlib.oauth2 import (
-    BackendApplicationServer, LegacyApplicationServer, MobileApplicationServer,
-    RequestValidator, WebApplicationServer,
+    BackendApplicationServer,
+    LegacyApplicationServer,
+    MobileApplicationServer,
+    RequestValidator,
+    WebApplicationServer,
 )
 
 from tests.unittest import TestCase
@@ -43,66 +47,76 @@ class ResourceOwnerAssociationTest(TestCase):
         return 'abc'
 
     def setUp(self):
-        self.validator = mock.MagicMock(spec=RequestValidator)
+        self.validator = mock.AsyncMock(spec=RequestValidator)
         self.validator.get_default_redirect_uri.return_value = 'http://i.b./path'
+        self.validator.get_default_scopes.return_value = []
         self.validator.get_code_challenge.return_value = None
         self.validator.authenticate_client.side_effect = self.set_client
-        self.web = WebApplicationServer(self.validator,
-                token_generator=self.inspect_client)
-        self.mobile = MobileApplicationServer(self.validator,
-                token_generator=self.inspect_client)
-        self.legacy = LegacyApplicationServer(self.validator,
-                token_generator=self.inspect_client)
-        self.backend = BackendApplicationServer(self.validator,
-                token_generator=self.inspect_client)
+        self.web = WebApplicationServer(
+            self.validator, token_generator=self.inspect_client
+        )
+        self.mobile = MobileApplicationServer(
+            self.validator, token_generator=self.inspect_client
+        )
+        self.legacy = LegacyApplicationServer(
+            self.validator, token_generator=self.inspect_client
+        )
+        self.backend = BackendApplicationServer(
+            self.validator, token_generator=self.inspect_client
+        )
 
-    def test_web_application(self):
+    async def test_web_application(self):
         # TODO: code generator + intercept test
-        h, _, s = self.web.create_authorization_response(
-                self.auth_uri + '&response_type=code',
-                credentials={'user': 'test'}, scopes=['random'])
+        h, _, s = await self.web.create_authorization_response(
+            self.auth_uri + '&response_type=code',
+            credentials={'user': 'test'},
+            scopes=['random'],
+        )
         self.assertEqual(s, 302)
         self.assertIn('Location', h)
         code = get_query_credentials(h['Location'])['code'][0]
-        self.assertRaises(ValueError,
-                self.web.create_token_response, self.token_uri,
-                body='grant_type=authorization_code&code=%s' % code)
+        with self.assertRaises(ValueError):
+            await self.web.create_token_response(
+                self.token_uri, body='grant_type=authorization_code&code=%s' % code
+            )
 
         self.validator.validate_code.side_effect = self.set_user
-        _, body, _ = self.web.create_token_response(self.token_uri,
-                body='grant_type=authorization_code&code=%s' % code)
+        _, body, _ = await self.web.create_token_response(
+            self.token_uri, body='grant_type=authorization_code&code=%s' % code
+        )
         self.assertEqual(json.loads(body)['access_token'], 'abc')
 
-    def test_mobile_application(self):
-        self.assertRaises(ValueError,
-                self.mobile.create_authorization_response,
-                self.auth_uri + '&response_type=token')
+    async def test_mobile_application(self):
+        with self.assertRaises(ValueError):
+            await self.mobile.create_authorization_response(
+                self.auth_uri + '&response_type=token'
+            )
 
-        h, _, s = self.mobile.create_authorization_response(
-                self.auth_uri + '&response_type=token',
-                credentials={'user': 'test'}, scopes=['random'])
+        h, _, s = await self.mobile.create_authorization_response(
+            self.auth_uri + '&response_type=token',
+            credentials={'user': 'test'},
+            scopes=['random'],
+        )
         self.assertEqual(s, 302)
         self.assertIn('Location', h)
-        self.assertEqual(get_fragment_credentials(h['Location'])['access_token'][0], 'abc')
+        self.assertEqual(
+            get_fragment_credentials(h['Location'])['access_token'][0], 'abc'
+        )
 
-    def test_legacy_application(self):
+    async def test_legacy_application(self):
         body = 'grant_type=password&username=abc&password=secret'
-        self.assertRaises(ValueError,
-                self.legacy.create_token_response,
-                self.token_uri, body=body)
+        with self.assertRaises(ValueError):
+            await self.legacy.create_token_response(self.token_uri, body=body)
 
         self.validator.validate_user.side_effect = self.set_user_from_username
-        _, body, _ = self.legacy.create_token_response(
-                self.token_uri, body=body)
+        _, body, _ = await self.legacy.create_token_response(self.token_uri, body=body)
         self.assertEqual(json.loads(body)['access_token'], 'abc')
 
-    def test_backend_application(self):
+    async def test_backend_application(self):
         body = 'grant_type=client_credentials'
-        self.assertRaises(ValueError,
-                self.backend.create_token_response,
-                self.token_uri, body=body)
+        with self.assertRaises(ValueError):
+            await self.backend.create_token_response(self.token_uri, body=body)
 
         self.validator.authenticate_client.side_effect = self.set_user_from_credentials
-        _, body, _ = self.backend.create_token_response(
-                self.token_uri, body=body)
+        _, body, _ = await self.backend.create_token_response(self.token_uri, body=body)
         self.assertEqual(json.loads(body)['access_token'], 'abc')

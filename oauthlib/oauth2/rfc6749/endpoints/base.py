@@ -107,7 +107,7 @@ class BaseEndpoint:
 
 def catch_errors_and_unavailability(f):
     @functools.wraps(f)
-    def wrapper(endpoint, uri, *args, **kwargs):
+    async def wrapped(endpoint, uri, *args, **kwargs):
         if not endpoint.available:
             e = TemporarilyUnavailableError()
             log.info('Endpoint unavailable, ignoring request %s.' % uri)
@@ -115,7 +115,7 @@ def catch_errors_and_unavailability(f):
 
         if endpoint.catch_errors:
             try:
-                return f(endpoint, uri, *args, **kwargs)
+                return await f(endpoint, uri, *args, **kwargs)
             except OAuth2Error:
                 raise
             except FatalClientError:
@@ -125,6 +125,6 @@ def catch_errors_and_unavailability(f):
                 log.warning('Exception caught while processing request, %s.' % e)
                 return {}, error.json, 500
         else:
-            return f(endpoint, uri, *args, **kwargs)
+            return await f(endpoint, uri, *args, **kwargs)
 
-    return wrapper
+    return wrapped

@@ -115,7 +115,7 @@ class ImplicitGrant(GrantTypeBase):
     response_types = ['token']
     grant_allows_refresh_token = False
 
-    def create_authorization_response(self, request, token_handler):
+    async def create_authorization_response(self, request, token_handler):
         """Create an authorization response.
 
         :param request: OAuthlib request.
@@ -160,7 +160,7 @@ class ImplicitGrant(GrantTypeBase):
         .. _`Section 10.12`: https://tools.ietf.org/html/rfc6749#section-10.12
         .. _`Appendix B`: https://tools.ietf.org/html/rfc6749#appendix-B
         """
-        return self.create_token_response(request, token_handler)
+        return await self.create_token_response(request, token_handler)
 
     async def create_token_response(self, request, token_handler):
         """Return token or error embedded in the URI fragment.
@@ -240,7 +240,7 @@ class ImplicitGrant(GrantTypeBase):
         # "id_token token" - return the access token and the id token
         # "id_token" - don't return the access token
         token = (
-            token_handler.create_token(request, refresh_token=False)
+            await token_handler.create_token(request, refresh_token=False)
             if 'token' in request.response_type.split()
             else {}
         )
@@ -249,12 +249,12 @@ class ImplicitGrant(GrantTypeBase):
             token['state'] = request.state
 
         for modifier in self._token_modifiers:
-            token = modifier(token, token_handler, request)
+            token = await modifier(token, token_handler, request)
 
         # In OIDC implicit flow it is possible to have a request_type that does
         # not include the access_token! In this case there is no need to save a token.
         if "token" in request.response_type.split():
-            self.request_validator.save_token(token, request)
+            await self.request_validator.save_token(token, request)
 
         return self.prepare_authorization_response(request, token, {}, None, 302)
 
@@ -311,12 +311,14 @@ class ImplicitGrant(GrantTypeBase):
         if not request.client_id:
             raise errors.MissingClientIdError(request=request)
 
-        if not self.request_validator.validate_client_id(request.client_id, request):
+        if not await self.request_validator.validate_client_id(
+            request.client_id, request
+        ):
             raise errors.InvalidClientIdError(request=request)
 
         # OPTIONAL. As described in Section 3.1.2.
         # https://tools.ietf.org/html/rfc6749#section-3.1.2
-        self._handle_redirects(request)
+        await self._handle_redirects(request)
 
         # Then check for normal errors.
 
@@ -346,7 +348,7 @@ class ImplicitGrant(GrantTypeBase):
             request.client_id,
             request.client,
         )
-        if not self.request_validator.validate_response_type(
+        if not await self.request_validator.validate_response_type(
             request.client_id, request.response_type, request.client, request
         ):
 
@@ -359,7 +361,7 @@ class ImplicitGrant(GrantTypeBase):
 
         # OPTIONAL. The scope of the access request as described by Section 3.3
         # https://tools.ietf.org/html/rfc6749#section-3.3
-        self.validate_scopes(request)
+        await self.validate_scopes(request)
 
         request_info.update(
             {

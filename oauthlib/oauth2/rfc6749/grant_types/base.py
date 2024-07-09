@@ -2,6 +2,7 @@
 oauthlib.oauth2.rfc6749.grant_types
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 """
+
 import logging
 from itertools import chain
 
@@ -56,8 +57,7 @@ class ValidatorsContainer:
     >>> auth_code_grant.custom_validators.post_token.append(my_token_validator)
     """
 
-    def __init__(self, post_auth, post_token,
-                 pre_auth, pre_token):
+    def __init__(self, post_auth, post_token, pre_auth, pre_token):
         self.pre_auth = pre_auth
         self.post_auth = post_auth
         self.pre_token = pre_token
@@ -99,13 +99,16 @@ class GrantTypeBase:
         pre_token = kwargs.get('pre_token', [])
         if not hasattr(self, 'validate_authorization_request'):
             if post_auth or pre_auth:
-                msg = ("{} does not support authorization validators. Use "
-                       "token validators instead.").format(self.__class__.__name__)
+                msg = (
+                    "{} does not support authorization validators. Use "
+                    "token validators instead."
+                ).format(self.__class__.__name__)
                 raise ValueError(msg)
             # Using tuples here because they can't be appended to:
             post_auth, pre_auth = (), ()
-        self.custom_validators = ValidatorsContainer(post_auth, post_token,
-                                                     pre_auth, pre_token)
+        self.custom_validators = ValidatorsContainer(
+            post_auth, post_token, pre_auth, pre_token
+        )
 
     def register_response_type(self, response_type):
         self.response_types.append(response_type)
@@ -116,7 +119,7 @@ class GrantTypeBase:
     def register_token_modifier(self, modifier):
         self._token_modifiers.append(modifier)
 
-    def create_authorization_response(self, request, token_handler):
+    async def create_authorization_response(self, request, token_handler):
         """
         :param request: OAuthlib request.
         :type request: oauthlib.common.Request
@@ -125,7 +128,7 @@ class GrantTypeBase:
         """
         raise NotImplementedError('Subclasses must implement this method.')
 
-    def create_token_response(self, request, token_handler):
+    async def create_token_response(self, request, token_handler):
         """
         :param request: OAuthlib request.
         :type request: oauthlib.common.Request
@@ -134,7 +137,7 @@ class GrantTypeBase:
         """
         raise NotImplementedError('Subclasses must implement this method.')
 
-    def add_token(self, token, token_handler, request):
+    async def add_token(self, token, token_handler, request):
         """
         :param token:
         :param token_handler: A token handler instance, for example of type
@@ -143,36 +146,54 @@ class GrantTypeBase:
         :type request: oauthlib.common.Request
         """
         # Only add a hybrid access token on auth step if asked for
-        if request.response_type not in ["token", "code token", "id_token token", "code id_token token"]:
+        if request.response_type not in [
+            "token",
+            "code token",
+            "id_token token",
+            "code id_token token",
+        ]:
             return token
 
-        token.update(token_handler.create_token(request, refresh_token=False))
+        token.update(await token_handler.create_token(request, refresh_token=False))
         return token
 
-    def validate_grant_type(self, request):
+    async def validate_grant_type(self, request):
         """
         :param request: OAuthlib request.
         :type request: oauthlib.common.Request
         """
         client_id = getattr(request, 'client_id', None)
-        if not self.request_validator.validate_grant_type(client_id,
-                                                          request.grant_type, request.client, request):
-            log.debug('Unauthorized from %r (%r) access to grant type %s.',
-                      request.client_id, request.client, request.grant_type)
+        if not await self.request_validator.validate_grant_type(
+            client_id, request.grant_type, request.client, request
+        ):
+            log.debug(
+                'Unauthorized from %r (%r) access to grant type %s.',
+                request.client_id,
+                request.client,
+                request.grant_type,
+            )
             raise errors.UnauthorizedClientError(request=request)
 
-    def validate_scopes(self, request):
+    async def validate_scopes(self, request):
         """
         :param request: OAuthlib request.
         :type request: oauthlib.common.Request
         """
         if not request.scopes:
             request.scopes = utils.scope_to_list(request.scope) or utils.scope_to_list(
-                self.request_validator.get_default_scopes(request.client_id, request))
-        log.debug('Validating access to scopes %r for client %r (%r).',
-                  request.scopes, request.client_id, request.client)
-        if not self.request_validator.validate_scopes(request.client_id,
-                                                      request.scopes, request.client, request):
+                await self.request_validator.get_default_scopes(
+                    request.client_id, request
+                )
+            )
+        log.debug(
+            'Validating access to scopes %r for client %r (%r).',
+            request.scopes,
+            request.client_id,
+            request.client,
+        )
+        if not await self.request_validator.validate_scopes(
+            request.client_id, request.scopes, request.client, request
+        ):
             raise errors.InvalidScopeError(request=request)
 
     def prepare_authorization_response(self, request, token, headers, body, status):
@@ -191,8 +212,11 @@ class GrantTypeBase:
         request.response_mode = request.response_mode or self.default_response_mode
 
         if request.response_mode not in ('query', 'fragment'):
-            log.debug('Overriding invalid response mode %s with %s',
-                      request.response_mode, self.default_response_mode)
+            log.debug(
+                'Overriding invalid response mode %s with %s',
+                request.response_mode,
+                self.default_response_mode,
+            )
             request.response_mode = self.default_response_mode
 
         token_items = token.items()
@@ -203,16 +227,17 @@ class GrantTypeBase:
 
         if request.response_mode == 'query':
             headers['Location'] = add_params_to_uri(
-                request.redirect_uri, token_items, fragment=False)
+                request.redirect_uri, token_items, fragment=False
+            )
             return headers, body, status
 
         if request.response_mode == 'fragment':
             headers['Location'] = add_params_to_uri(
-                request.redirect_uri, token_items, fragment=True)
+                request.redirect_uri, token_items, fragment=True
+            )
             return headers, body, status
 
-        raise NotImplementedError(
-            'Subclasses must set a valid default_response_mode')
+        raise NotImplementedError('Subclasses must set a valid default_response_mode')
 
     def _get_default_headers(self):
         """Create default headers for grant responses."""
@@ -222,7 +247,7 @@ class GrantTypeBase:
             'Pragma': 'no-cache',
         }
 
-    def _handle_redirects(self, request):
+    async def _handle_redirects(self, request):
         if request.redirect_uri is not None:
             request.using_default_redirect_uri = False
             log.debug('Using provided redirect_uri %s', request.redirect_uri)
@@ -234,12 +259,14 @@ class GrantTypeBase:
             # redirection URI registered by the client as described in
             # Section 3.1.2.
             # https://tools.ietf.org/html/rfc6749#section-3.1.2
-            if not self.request_validator.validate_redirect_uri(
-                    request.client_id, request.redirect_uri, request):
+            if not await self.request_validator.validate_redirect_uri(
+                request.client_id, request.redirect_uri, request
+            ):
                 raise errors.MismatchingRedirectURIError(request=request)
         else:
-            request.redirect_uri = self.request_validator.get_default_redirect_uri(
-                request.client_id, request)
+            request.redirect_uri = await self.request_validator.get_default_redirect_uri(
+                request.client_id, request
+            )
             request.using_default_redirect_uri = True
             log.debug('Using default redirect_uri %s.', request.redirect_uri)
             if not request.redirect_uri:
@@ -247,7 +274,7 @@ class GrantTypeBase:
             if not is_absolute_uri(request.redirect_uri):
                 raise errors.InvalidRedirectURIError(request=request)
 
-    def _create_cors_headers(self, request):
+    async def _create_cors_headers(self, request):
         """If CORS is allowed, create the appropriate headers."""
         if 'origin' not in request.headers:
             return {}
@@ -256,8 +283,9 @@ class GrantTypeBase:
         if not is_secure_transport(origin):
             log.debug('Origin "%s" is not HTTPS, CORS not allowed.', origin)
             return {}
-        elif not self.request_validator.is_origin_allowed(
-            request.client_id, origin, request):
+        elif not await self.request_validator.is_origin_allowed(
+            request.client_id, origin, request
+        ):
             log.debug('Invalid origin "%s", CORS not allowed.', origin)
             return {}
         else:

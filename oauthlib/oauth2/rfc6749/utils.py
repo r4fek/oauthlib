@@ -4,6 +4,7 @@ oauthlib.utils
 
 This module contains utility methods used by various parts of the OAuth 2 spec.
 """
+
 import datetime
 import os
 from urllib.parse import quote, urlparse
@@ -18,7 +19,9 @@ def list_to_scope(scope):
     elif isinstance(scope, (set, tuple, list)):
         return " ".join([str(s) for s in scope])
     else:
-        raise ValueError("Invalid scope (%s), must be string, tuple, set, or list." % scope)
+        raise ValueError(
+            "Invalid scope (%s), must be string, tuple, set, or list." % scope
+        )
 
 
 def scope_to_list(scope):
@@ -71,8 +74,7 @@ def escape(u):
 def generate_age(issue_time):
     """Generate a age parameter for MAC authentication draft 00."""
     td = datetime.datetime.now() - issue_time
-    age = (td.microseconds + (td.seconds + td.days * 24 * 3600)
-           * 10 ** 6) / 10 ** 6
+    age = (td.microseconds + (td.seconds + td.days * 24 * 3600) * 10**6) / 10**6
     return str(age)
 
 

@@ -2,6 +2,7 @@
 oauthlib.oauth2.rfc6749.grant_types
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 """
+
 import json
 import logging
 
@@ -12,7 +13,6 @@ log = logging.getLogger(__name__)
 
 
 class ClientCredentialsGrant(GrantTypeBase):
-
     """`Client Credentials Grant`_
 
     The client can request an access token using only its client
@@ -72,15 +72,19 @@ class ClientCredentialsGrant(GrantTypeBase):
             headers.update(e.headers)
             return headers, e.json, e.status_code
 
-        token = token_handler.create_token(request, refresh_token=False)
+        token = await token_handler.create_token(request, refresh_token=False)
 
         for modifier in self._token_modifiers:
             token = modifier(token)
 
-        self.request_validator.save_token(token, request)
+        await self.request_validator.save_token(token, request)
 
-        log.debug('Issuing token to client id %r (%r), %r.',
-                  request.client_id, request.client, token)
+        log.debug(
+            'Issuing token to client id %r (%r), %r.',
+            request.client_id,
+            request.client,
+            token,
+        )
         return headers, json.dumps(token), 200
 
     async def validate_token_request(self, request):
@@ -92,31 +96,35 @@ class ClientCredentialsGrant(GrantTypeBase):
             validator(request)
 
         if not getattr(request, 'grant_type', None):
-            raise errors.InvalidRequestError('Request is missing grant type.',
-                                             request=request)
+            raise errors.InvalidRequestError(
+                'Request is missing grant type.', request=request
+            )
 
         if not request.grant_type == 'client_credentials':
             raise errors.UnsupportedGrantTypeError(request=request)
 
         for param in ('grant_type', 'scope'):
             if param in request.duplicate_params:
-                raise errors.InvalidRequestError(description='Duplicate %s parameter.' % param,
-                                                 request=request)
+                raise errors.InvalidRequestError(
+                    description='Duplicate %s parameter.' % param, request=request
+                )
 
         log.debug('Authenticating client, %r.', request)
         if not await self.request_validator.authenticate_client(request):
             log.debug('Client authentication failed, %r.', request)
             raise errors.InvalidClientError(request=request)
         elif not hasattr(request.client, 'client_id'):
-            raise NotImplementedError('Authenticate client must set the '
-                                      'request.client.client_id attribute '
-                                      'in authenticate_client.')
+            raise NotImplementedError(
+                'Authenticate client must set the '
+                'request.client.client_id attribute '
+                'in authenticate_client.'
+            )
         # Ensure client is authorized use of this grant type
-        self.validate_grant_type(request)
+        await self.validate_grant_type(request)
 
         request.client_id = request.client_id or request.client.client_id
         log.debug('Authorizing access to client %r.', request.client_id)
-        self.validate_scopes(request)
+        await self.validate_scopes(request)
 
         for validator in self.custom_validators.post_token:
             validator(request)
