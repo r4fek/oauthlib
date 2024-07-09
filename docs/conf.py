@@ -45,8 +45,8 @@ source_suffix = '.rst'
 master_doc = 'index'
 
 # General information about the project.
-project = 'OAuthLib'
-copyright = '2019, The OAuthlib Community'
+project = 'aOAuthLib'
+copyright = '2024, The OAuthlib Community'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -248,4 +248,4 @@ texinfo_documents = [
 # How to display URL addresses: 'footnote', 'no', or 'inline'.
 #texinfo_show_urls = 'footnote'
 
-linkcheck_ignore = ["https://github.com/oauthlib/oauthlib/issues/new"]
+linkcheck_ignore = ["https://github.com/r4fek/oauthlib/issues/new"]
